@@ -1,0 +1,5 @@
+[core]
+    remote = gcs-remote
+['remote "gcs-remote"']
+    url = gs://iris-dvc-bucket-rare-hub-473405-c2
+    credentialpath = ../dvc-sa-key.json

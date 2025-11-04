@@ -1,0 +1,10 @@
+.vscode/
+.venv/
+__pycache__/
+*.pyc
+dvc.lock
+.dvc/cache/
+*.db
+dvc-sa-key.json
+.ipynb_checkpoints/
+*sa-key*.json

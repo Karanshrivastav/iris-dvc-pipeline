@@ -1,0 +1,12 @@
+dvc[gcs]>=2.0.0
+pytest
+joblib
+scikit-learn
+pandas
+pytest-md
+google-cloud-storage
+dvc
+dvc-gs
+pytest
+flask
+gunicorn
