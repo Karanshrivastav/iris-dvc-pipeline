@@ -1,0 +1,8 @@
+.vscode/
+.venv/
+__pycache__/
+*.pyc
+dvc.lock
+.dvc/cache/
+*.db
+dvc-sa-key.json
