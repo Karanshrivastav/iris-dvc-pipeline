@@ -8,7 +8,7 @@ on:
 env:
   IMAGE_NAME: "iris-api"
   IMAGE_REPO_REGION: ${{ secrets.GCP_REGION }}
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  PROJECT_ID: ${{ secrets.GCP_PROJECT }}
   ARTIFACT_REPO: ${{ secrets.ARTIFACT_REGISTRY_REPOSITORY }}
 
 jobs:
