@@ -8,3 +8,6 @@ dvc.lock
 dvc-sa-key.json
 .ipynb_checkpoints/
 *sa-key*.json
+gha-deployer-key.json
+*-key.json
+*.json
