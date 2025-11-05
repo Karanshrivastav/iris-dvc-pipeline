@@ -58,6 +58,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install dvc[gcs]
+          pip install dvc-gs
 
       - name: DVC pull (get model)
         env:
