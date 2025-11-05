@@ -97,21 +97,25 @@ jobs:
         run: |
           kubectl apply -f k8s-deploy/deployment.yaml
           kubectl apply -f k8s-deploy/service.yaml
-          # wait for rollout
           kubectl rollout status deployment/iris-api --timeout=120s || kubectl rollout status deployment/iris-api
-      - name: Get service external IP
+
+      - name: Wait for LoadBalancer IP (retry loop)
+        id: get_ip
         run: |
-          echo "Waiting for LoadBalancer external IP (may take a while)..."
+          echo "Waiting for LoadBalancer external IP..."
           for i in {1..30}; do
-            EXTERNAL_IP=$(kubectl get svc iris-api-lb -o jsonpath="{.status.loadBalancer.ingress[0].ip}" || true)
-            if [ -n "$EXTERNAL_IP" ]; then
-              echo "Service external IP: $EXTERNAL_IP"
-              break
+            IP=$(kubectl get svc iris-api-lb -o jsonpath="{.status.loadBalancer.ingress[0].ip}" 2>/dev/null)
+            if [ -n "$IP" ]; then
+              echo "EXTERNAL_IP=$IP" >> $GITHUB_OUTPUT
+              echo "✅ Found external IP: $IP"
+              exit 0
             fi
-            echo "Waiting... ($i/30)"
+            echo "⏳ Not ready yet ($i/30), sleeping 10s..."
             sleep 10
           done
-          kubectl get svc iris-api-lb -o wide
+          echo "❌ ERROR: External IP not assigned after waiting"
+          exit 1
+
       - name: Apply Horizontal Pod Autoscaler (HPA)
         run: |
           echo "Applying HPA (min 1, max 3 pods)..."
@@ -154,16 +158,17 @@ jobs:
       - name: Run wrk test - concurrency 1000
         id: wrk1
         run: |
-          IP=$(kubectl get svc iris-api-lb -o jsonpath="{.status.loadBalancer.ingress[0].ip}")
-          echo "Running 1000 concurrent request test on http://$IP/predict"
+          IP=${{ steps.get_ip.outputs.EXTERNAL_IP }}
+          echo "🚀 Running 1000 concurrent test on http://$IP/predict"
           ./scripts/run_wrk.sh "http://$IP/predict" 1000 30s 4 "wrk-1000.txt"
 
-      - name: Run wrk test - concurrency 2000
+      - name: Run wrk test - concurrency 2000 (expect slowdown)
         id: wrk2
+        continue-on-error: true
         run: |
-          IP=$(kubectl get svc iris-api-lb -o jsonpath="{.status.loadBalancer.ingress[0].ip}")
-          echo "Running 2000 concurrent request test on http://$IP/predict"
-          ./scripts/run_wrk.sh "http://$IP/predict" 2000 30s 4 "wrk-2000.txt" || true
+          IP=${{ steps.get_ip.outputs.EXTERNAL_IP }}
+          echo "🚀 Running 2000 concurrent test on http://$IP/predict"
+          ./scripts/run_wrk.sh "http://$IP/predict" 2000 30s 4 "wrk-2000.txt"
 
       - name: Upload wrk results as artifacts
         uses: actions/upload-artifact@v4
@@ -174,3 +179,4 @@ jobs:
             wrk-2000.txt
             wrk-1000.txt.kubepods.txt
             wrk-2000.txt.kubepods.txt
+
