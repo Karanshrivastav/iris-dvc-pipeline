@@ -29,17 +29,15 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get install -y jq
-
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v1
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: ${{ secrets.GCP_DEPLOY_SA_KEY }}
 
       - name: Configure gcloud project
         run: |
           gcloud config set project $PROJECT_ID
           gcloud config set compute/region $IMAGE_REPO_REGION
-
       - name: Install gcloud components & kubectl
         run: |
           # install gcloud components for artifact registry & kubectl if not present
@@ -48,26 +46,25 @@ jobs:
           gcloud components install alpha --quiet || true
           gcloud components install beta --quiet || true
           kubectl version --client
-
       - name: Setup Docker auth to Artifact Registry
         run: |
           # Enable artifact registry docker auth
           gcloud auth configure-docker ${IMAGE_REPO_REGION}-docker.pkg.dev --quiet
-
       - name: Install DVC
         run: |
           python -m pip install --upgrade pip
           pip install dvc[gcs]
+          pip install dvc-gs
+
+      - name: Show GCP credentials file
+        run: |
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS"
+          head -n 5 $GOOGLE_APPLICATION_CREDENTIALS
 
       - name: DVC pull (get model)
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/gcp-key.json
         run: |
-          # write key to a temp file for dvc
-          echo "${{ secrets.GCP_SA_KEY }}" > "${{ runner.temp }}/gcp-key.json"
-          export GOOGLE_APPLICATION_CREDENTIALS="${{ runner.temp }}/gcp-key.json"
           dvc pull --force
-
+          
       - name: Build and push Docker image to Artifact Registry
         id: build_push
         env:
@@ -81,7 +78,6 @@ jobs:
           echo "Building image ${IMAGE_URI}"
           docker build -t ${IMAGE_URI} .
           docker push ${IMAGE_URI}
-
       - name: Get GKE credentials
         uses: google-github-actions/get-gke-credentials@v1
         with:
@@ -97,14 +93,12 @@ jobs:
           sed "s|REPLACE_IMAGE_PLACEHOLDER|${IMAGE_URI}|g" k8s/deployment.yaml > k8s-deploy/deployment.yaml
           cp k8s/service.yaml k8s-deploy/service.yaml
           ls -R k8s-deploy
-
       - name: Apply Kubernetes manifests
         run: |
           kubectl apply -f k8s-deploy/deployment.yaml
           kubectl apply -f k8s-deploy/service.yaml
           # wait for rollout
           kubectl rollout status deployment/iris-api --timeout=120s || kubectl rollout status deployment/iris-api
-
       - name: Get service external IP
         run: |
           echo "Waiting for LoadBalancer external IP (may take a while)..."
@@ -180,5 +174,3 @@ jobs:
             wrk-2000.txt
             wrk-1000.txt.kubepods.txt
             wrk-2000.txt.kubepods.txt
-
-    
