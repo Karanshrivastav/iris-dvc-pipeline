@@ -71,7 +71,7 @@ jobs:
           TAG: ${{ github.sha }}
           REGION: ${{ secrets.GCP_REGION }}
           REPO: ${{ secrets.ARTIFACT_REGISTRY_REPOSITORY }}
-          PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+          PROJECT: ${{ secrets.GCP_PROJECT }}
         run: |
           IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/${IMAGE_NAME}:${TAG}"
           echo "IMAGE_URI=${IMAGE_URI}" >> $GITHUB_OUTPUT
@@ -83,7 +83,7 @@ jobs:
         with:
           cluster_name: ${{ secrets.GKE_CLUSTER_NAME }}
           location: ${{ secrets.GKE_CLUSTER_ZONE }}
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          project_id: ${{ secrets.GCP_PROJECT }}
 
       - name: Replace image placeholder in k8s manifest
         run: |
