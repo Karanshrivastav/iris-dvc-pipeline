@@ -112,3 +112,65 @@ jobs:
             sleep 10
           done
           kubectl get svc iris-api-lb -o wide
+      - name: Apply Horizontal Pod Autoscaler (HPA)
+        run: |
+          echo "Applying HPA (min 1, max 3 pods)..."
+          kubectl apply -f k8s/hpa.yaml
+          kubectl get hpa
+
+      - name: Install wrk for stress testing
+        run: |
+          sudo apt-get update && sudo apt-get install -y build-essential libssl-dev git
+          git clone https://github.com/wg/wrk.git /tmp/wrk
+          cd /tmp/wrk && make
+          sudo cp wrk /usr/local/bin/wrk
+          wrk --version
+
+      - name: Create wrk load test scripts
+        run: |
+          mkdir -p scripts
+          cat > scripts/wrk_post.lua <<'EOF'
+          wrk.method = "POST"
+          wrk.headers["Content-Type"] = "application/json"
+          local payload = '{"instances":[[5.1,3.5,1.4,0.2]]}'
+          wrk.body = payload
+          EOF
+                    cat > scripts/run_wrk.sh <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          URL="$1"
+          CONCURRENCY="$2"
+          DURATION="${3:-30s}"
+          THREADS="${4:-4}"
+          OUTFILE="${5:-wrk-output.txt}"
+          echo "Running wrk against $URL (c=$CONCURRENCY, t=$THREADS, d=$DURATION)"
+          wrk -t${THREADS} -c${CONCURRENCY} -d${DURATION} -s scripts/wrk_post.lua "$URL" 2>&1 | tee "${OUTFILE}"
+          kubectl get pods -o wide > "${OUTFILE}.kubepods.txt" || true
+          kubectl top pods --no-headers >> "${OUTFILE}.kubepods.txt" || true
+          kubectl get hpa -o wide >> "${OUTFILE}.kubepods.txt" || true
+          EOF
+          chmod +x scripts/run_wrk.sh
+
+      - name: Run wrk test - concurrency 1000
+        id: wrk1
+        run: |
+          IP=$(kubectl get svc iris-api-lb -o jsonpath="{.status.loadBalancer.ingress[0].ip}")
+          echo "Running 1000 concurrent request test on http://$IP/predict"
+          ./scripts/run_wrk.sh "http://$IP/predict" 1000 30s 4 "wrk-1000.txt"
+
+      - name: Run wrk test - concurrency 2000
+        id: wrk2
+        run: |
+          IP=$(kubectl get svc iris-api-lb -o jsonpath="{.status.loadBalancer.ingress[0].ip}")
+          echo "Running 2000 concurrent request test on http://$IP/predict"
+          ./scripts/run_wrk.sh "http://$IP/predict" 2000 30s 4 "wrk-2000.txt" || true
+
+      - name: Upload wrk results as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wrk-results
+          path: |
+            wrk-1000.txt
+            wrk-2000.txt
+            wrk-1000.txt.kubepods.txt
+            wrk-2000.txt.kubepods.txt
