@@ -129,7 +129,8 @@ jobs:
           git clone https://github.com/wg/wrk.git /tmp/wrk
           cd /tmp/wrk && make
           sudo cp wrk /usr/local/bin/wrk
-          wrk --version
+          echo "wrk installed successfully"
+          wrk -h || true
 
       - name: Create wrk load test scripts
         run: |
