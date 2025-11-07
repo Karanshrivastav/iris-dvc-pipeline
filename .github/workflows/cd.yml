@@ -120,6 +120,7 @@ jobs:
 
       - name: Apply Horizontal Pod Autoscaler (HPA)
         run: |
+          echo "⚙️ Applying default HPA (1–3 pods)..."
           kubectl apply -f k8s/hpa.yaml
           kubectl get hpa
 
@@ -155,3 +156,54 @@ jobs:
             wrk-2000.txt
             wrk-pods.txt
       # --- End In-cluster wrk stress test ---
+
+      # --- Begin Bottleneck Simulation (HPA restricted to 1 pod) ---
+      - name: Restrict HPA to single pod (simulate bottleneck)
+        run: |
+          echo "🧩 Restricting HPA to 1 pod to observe bottleneck..."
+          cat > k8s/hpa-single.yaml <<'EOF'
+          apiVersion: autoscaling/v2
+          kind: HorizontalPodAutoscaler
+          metadata:
+            name: iris-api-hpa
+          spec:
+            scaleTargetRef:
+              apiVersion: apps/v1
+              kind: Deployment
+              name: iris-api
+            minReplicas: 1
+            maxReplicas: 1
+            metrics:
+              - type: Resource
+                resource:
+                  name: cpu
+                  target:
+                    type: Utilization
+                    averageUtilization: 50
+          EOF
+          kubectl apply -f k8s/hpa-single.yaml
+          kubectl get hpa
+
+      - name: Run wrk test under bottleneck (max 1 pod)
+        run: |
+          echo "🔥 Running 2000 concurrency under restricted scaling (1 pod)..."
+          kubectl exec wrk-tester -- wrk -t4 -c2000 -d30s -s /wrk_post.lua http://iris-api-lb/predict 2>&1 | tee wrk-bottleneck.txt
+          echo "Collecting post-test metrics..."
+          kubectl get pods -o wide > wrk-bottleneck-pods.txt || true
+          kubectl top pods --no-headers >> wrk-bottleneck-pods.txt || true
+          kubectl get hpa -o wide >> wrk-bottleneck-pods.txt || true
+
+      - name: Upload bottleneck results
+        uses: actions/upload-artifact@v4
+        with:
+          name: wrk-bottleneck-results
+          path: |
+            wrk-bottleneck.txt
+            wrk-bottleneck-pods.txt
+      # --- End Bottleneck Simulation ---
+
+      - name: Cleanup wrk-tester pod
+        if: always()
+        run: |
+          echo "🧹 Cleaning up wrk-tester pod..."
+          kubectl delete pod wrk-tester --ignore-not-found
