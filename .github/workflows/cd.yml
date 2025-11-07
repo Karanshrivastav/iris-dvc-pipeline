@@ -123,54 +123,28 @@ jobs:
           kubectl apply -f k8s/hpa.yaml
           kubectl get hpa
 
-      - name: Install wrk for stress testing
+      # --- Begin In-cluster wrk stress test ---
+      - name: Run in-cluster wrk load test
         run: |
-          sudo apt-get update && sudo apt-get install -y build-essential libssl-dev git
-          git clone https://github.com/wg/wrk.git /tmp/wrk
-          cd /tmp/wrk && make
-          sudo cp wrk /usr/local/bin/wrk
-          echo "wrk installed successfully"
-          wrk -h || true
+          echo "🚀 Starting in-cluster wrk load test..."
+          kubectl delete pod wrk-tester --ignore-not-found
+          kubectl run wrk-tester --image=williamyeh/wrk --restart=Never --command -- /bin/sh -c "while true; do sleep 3600; done"
+          echo "Waiting for wrk-tester pod to start..."
+          kubectl wait --for=condition=Ready pod/wrk-tester --timeout=120s
 
-      - name: Create wrk load test scripts
-        run: |
-          mkdir -p scripts
-          cat > scripts/wrk_post.lua <<'EOF'
-          wrk.method = "POST"
-          wrk.headers["Content-Type"] = "application/json"
-          local payload = '{"instances":[[5.1,3.5,1.4,0.2]]}'
-          wrk.body = payload
-          EOF
-          
-                    cat > scripts/run_wrk.sh <<'EOF'
-          #!/usr/bin/env bash
-          set -euo pipefail
-          URL="$1"
-          CONCURRENCY="$2"
-          DURATION="${3:-30s}"
-          THREADS="${4:-4}"
-          OUTFILE="${5:-wrk-output.txt}"
-          echo "Running wrk against $URL (c=$CONCURRENCY, t=$THREADS, d=$DURATION)"
-          wrk -t${THREADS} -c${CONCURRENCY} -d${DURATION} -s scripts/wrk_post.lua "$URL" 2>&1 | tee "${OUTFILE}"
-          kubectl get pods -o wide > "${OUTFILE}.kubepods.txt" || true
-          kubectl top pods --no-headers >> "${OUTFILE}.kubepods.txt" || true
-          kubectl get hpa -o wide >> "${OUTFILE}.kubepods.txt" || true
-          EOF
-          chmod +x scripts/run_wrk.sh
+          echo 'wrk.method="POST";wrk.headers["Content-Type"]="application/json";wrk.body="{\"instances\":[[5.1,3.5,1.4,0.2]]}"' > wrk_post.lua
+          kubectl cp wrk_post.lua wrk-tester:/wrk_post.lua
 
-      - name: Run wrk test - concurrency 1000
-        id: wrk1
-        continue-on-error: true
-        run: |
-          IP=${{ steps.get_ip.outputs.EXTERNAL_IP }}
-          ./scripts/run_wrk.sh "http://$IP/predict" 1000 30s 4 "wrk-1000.txt"
+          echo "🔥 Running 1000 concurrency test inside cluster..."
+          kubectl exec wrk-tester -- wrk -t4 -c1000 -d30s -s /wrk_post.lua http://iris-api-lb/predict > wrk-1000.txt || true
 
-      - name: Run wrk test - concurrency 2000
-        id: wrk2
-        continue-on-error: true
-        run: |
-          IP=${{ steps.get_ip.outputs.EXTERNAL_IP }}
-          ./scripts/run_wrk.sh "http://$IP/predict" 2000 30s 4 "wrk-2000.txt"
+          echo "🔥 Running 2000 concurrency test inside cluster..."
+          kubectl exec wrk-tester -- wrk -t4 -c2000 -d30s -s /wrk_post.lua http://iris-api-lb/predict > wrk-2000.txt || true
+
+          echo "Collecting pod status..."
+          kubectl get pods -o wide > wrk-pods.txt || true
+          kubectl top pods --no-headers >> wrk-pods.txt || true
+          kubectl get hpa -o wide >> wrk-pods.txt || true
 
       - name: Upload wrk results as artifacts
         uses: actions/upload-artifact@v4
@@ -179,5 +153,5 @@ jobs:
           path: |
             wrk-1000.txt
             wrk-2000.txt
-            wrk-1000.txt.kubepods.txt
-            wrk-2000.txt.kubepods.txt
+            wrk-pods.txt
+      # --- End In-cluster wrk stress test ---
