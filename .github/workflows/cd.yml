@@ -136,10 +136,10 @@ jobs:
           kubectl cp wrk_post.lua wrk-tester:/wrk_post.lua
 
           echo "🔥 Running 1000 concurrency test inside cluster..."
-          kubectl exec wrk-tester -- wrk -t4 -c1000 -d30s -s /wrk_post.lua http://iris-api-lb/predict > wrk-1000.txt || true
+          kubectl exec wrk-tester -- wrk -t4 -c1000 -d30s -s /wrk_post.lua http://iris-api-lb/predict 2>&1 | tee wrk-1000.txt || true
 
           echo "🔥 Running 2000 concurrency test inside cluster..."
-          kubectl exec wrk-tester -- wrk -t4 -c2000 -d30s -s /wrk_post.lua http://iris-api-lb/predict > wrk-2000.txt || true
+          kubectl exec wrk-tester -- wrk -t4 -c2000 -d30s -s /wrk_post.lua http://iris-api-lb/predict 2>&1 | tee wrk-2000.txt || true
 
           echo "Collecting pod status..."
           kubectl get pods -o wide > wrk-pods.txt || true
