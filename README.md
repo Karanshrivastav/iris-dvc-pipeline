@@ -165,16 +165,17 @@ kubectl apply -f k8s/hpa.yaml
 
 ```mermaid
 flowchart TD
-A[Push to main branch] --> B[CI Workflow: Build + Test]
-B --> C[Docker Build + Push to Artifact Registry]
-C --> D[CD Workflow Triggered]
-D --> E[Deploy to GKE]
-E --> F[Apply HPA (min=1, max=3)]
-F --> G[Run wrk Load Test: c=1000, c=2000]
-G --> H[Observe Autoscaling]
-H --> I[Restrict Scaling (max=1)]
-I --> J[Re-run wrk at c=2000]
-J --> K[Collect Metrics + Upload Artifacts]
+A["Push to main branch"] --> B["CI Workflow: Build + Test"]
+B --> C["Docker Build + Push to Artifact Registry"]
+C --> D["CD Workflow Triggered"]
+D --> E["Deploy to GKE"]
+E --> F["Apply HPA (min=1, max=3)"]
+F --> G["Run wrk Load Test: c=1000, c=2000"]
+G --> H["Observe Autoscaling"]
+H --> I["Restrict Scaling (max=1)"]
+I --> J["Re-run wrk at c=2000"]
+J --> K["Collect Metrics + Upload Artifacts"]
+
 ```
 
 ---
