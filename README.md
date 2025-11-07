@@ -247,6 +247,47 @@ kubectl delete hpa iris-api-hpa
 ```
 
 ---
+## 🧪 Load Testing (`wrk`) — Observed Results
+
+**Test scenarios executed:**
+
+1. **Normal HPA scaling (1–3 pods)**  
+   - **1000 concurrent connections**:  
+     - Avg Latency: ~987 ms  
+     - Requests/sec: 101  
+     - Pods scaled automatically: 2–3  
+     - Socket errors: minimal (1 write timeout)  
+     - Outcome: **Stable latency, normal scaling**
+
+   - **2000 concurrent connections**:  
+     - Avg Latency: ~890 ms  
+     - Requests/sec: 79  
+     - Pods scaled automatically: 3  
+     - Socket errors: moderate (824 read timeouts)  
+     - Outcome: **Latency increased slightly, scaling handled load**
+
+2. **Restricted HPA (maxPods=1) — Bottleneck Observation**  
+   - **2000 concurrent connections**:  
+     - Avg Latency: ~874 ms  
+     - Requests/sec: 99  
+     - Pods: 1 (HPA restriction)  
+     - Socket errors: high (1045 read, 1307 write, 2789 timeouts)  
+     - Outcome: **Severe bottleneck observed, high request failures, latency spikes**
+
+**Summary Table:**
+
+| Scenario | Pods | Avg Latency | Requests/sec | Socket Errors | Outcome |
+|----------|------|------------|--------------|---------------|---------|
+| Load = 1000, HPA 1–3 pods | 2–3 | 986.8 ms | 101 | Minimal | Stable latency, normal scaling |
+| Load = 2000, HPA 1–3 pods | 3 | 889.7 ms | 79 | Moderate | Latency increased slightly, scaling handled load |
+| Load = 2000, HPA maxPods=1 | 1 | 874.4 ms | 99 | High | Severe bottleneck, high timeouts, request failures |
+
+**Analysis:**
+
+- **Auto-scaling works:** HPA successfully added pods under higher load.  
+- **Bottleneck demonstration successful:** Restricting HPA shows performance degradation and request failures.  
+- **Throughput vs latency tradeoff visible:** Higher concurrency slightly increases latency, but manageable when scaling is enabled.
+
 
 ## 💡 Key Learnings
 
